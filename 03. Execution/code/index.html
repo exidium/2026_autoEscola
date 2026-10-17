@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Teórico Moto A2</title>
+  <meta name="description" content="Entrenador para el examen teórico de moto de la DGT (permisos A1 y A2): práctica por temas, simulacros y corrección explicada.">
+  <meta name="theme-color" content="#14171c">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23c8102e'/><circle cx='50' cy='50' r='35' fill='white'/><text x='50' y='64' font-family='Arial' font-weight='700' font-size='38' text-anchor='middle'>A2</text></svg>">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <button class="brand" data-go="home" aria-label="Inicio">
+      <span class="brand-mark">A2</span>
+      <span class="brand-text">Teórico Moto <small>DGT · A1/A2</small></span>
+    </button>
+    <nav class="topnav">
+      <button data-go="stats">Estadísticas</button>
+    </nav>
+  </header>
+
+  <main id="app" tabindex="-1">
+    <p class="loading">Cargando preguntas…</p>
+  </main>
+
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title"></h2>
+      <p id="modal-body"></p>
+      <div class="modal-actions">
+        <button class="btn ghost" data-modal="cancel">Cancelar</button>
+        <button class="btn primary" data-modal="ok">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="scripts/app.js"></script>
+</body>
+</html>
