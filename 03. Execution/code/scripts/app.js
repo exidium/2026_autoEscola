@@ -1,5 +1,6 @@
 import * as quiz from './quiz.js';
 import * as store from './storage.js';
+import * as hist from './history.js';
 
 export const TEMAS = [
   { id: 'permisos', nombre: 'Permisos y documentación' },
@@ -19,7 +20,7 @@ const EXAMS = {
   especifico: { nombre: 'Simulacro examen moto', n: 20, maxErrors: 2, minutes: 20 },
   largo: { nombre: 'Simulacro largo', n: 30, maxErrors: 3, minutes: 30 },
 };
-const LETTERS = ['A', 'B', 'C'];
+const LETTERS = ['A', 'B', 'C', 'D', 'E'];
 
 const app = document.getElementById('app');
 let bank = [];
@@ -28,6 +29,7 @@ let timerId = null;
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtDate = ts => new Date(ts).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const fmtTime = sec => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 
 // ---------- modal (sustituye a confirm()) ----------
@@ -64,6 +66,7 @@ async function go(screen) {
   }
   if (screen === 'home') renderHome();
   else if (screen === 'stats') renderStats();
+  else if (screen === 'history') renderHistory();
   window.scrollTo(0, 0);
 }
 
@@ -187,6 +190,7 @@ function startSession(opts) {
     idx: 0,
     startedAt: Date.now(),
     finished: false,
+    fromHistory: false,
   };
   if (session.limitSec) {
     timerId = setInterval(tick, 1000);
@@ -333,15 +337,27 @@ async function finish(timeout) {
     title: s.title,
     total: result.total,
     errors: result.errors,
+    maxErrors: s.maxErrors ?? null,
     passed,
     duration,
+    items: result.items.map(x => ({ id: x.q.id, a: quiz.originalIndex(x.q, x.answer) })),
   });
-  renderResults(result, { passed, duration, timeout });
+  renderResults(result, { ...s, passed, duration, timeout });
+}
+
+// Reconstruye la corrección de un intento guardado en el historial.
+function attemptResult(entry) {
+  const byId = new Map(bank.map(q => [q.id, q]));
+  const kept = (entry.items || []).filter(it => byId.has(it.id));
+  const questions = kept.map(it => quiz.unshuffled(byId.get(it.id)));
+  return quiz.grade(questions, kept.map(it => it.a));
 }
 
 // ---------- resultados ----------
-function renderResults(result, { passed, duration, timeout }) {
-  const s = session;
+// meta: { mode, kind, tema, title, maxErrors, questions, feedback, passed, duration, timeout, fromHistory }
+function renderResults(result, meta) {
+  const s = meta;
+  const { passed, duration, timeout } = meta;
   const okCount = result.total - result.errors;
   const pct = Math.round((okCount / result.total) * 100);
   const isExam = s.mode === 'exam';
@@ -391,14 +407,16 @@ function renderResults(result, { passed, duration, timeout }) {
       ${timeout ? '<p class="notice">Se acabó el tiempo. El examen se ha corregido automáticamente.</p>' : ''}
       ${verdict}
       <div class="result-meta">
-        <span>${esc(s.title)}</span>
+        <span>${esc(s.title)}${s.fromHistory ? ` · ${fmtDate(s.date)}` : ''}</span>
         <span>Tiempo: ${fmtTime(duration)}</span>
       </div>
 
       <div class="result-actions">
         ${wrongIds.length ? '<button class="btn primary" data-res="retry-wrong">Repetir las falladas</button>' : ''}
         <button class="btn ${wrongIds.length ? 'ghost' : 'primary'}" data-res="again">${isExam ? 'Nuevo simulacro' : 'Otra ronda'}</button>
-        <button class="btn ghost" data-go="home">Inicio</button>
+        ${s.fromHistory
+          ? '<button class="btn ghost" data-go="history">Volver al historial</button>'
+          : '<button class="btn ghost" data-go="home">Inicio</button>'}
       </div>
 
       <details class="by-tema" ${Object.keys(byTema).length > 1 ? 'open' : ''}>
@@ -475,16 +493,8 @@ function renderStats() {
       </ul>
 
       <h2>Historial</h2>
-      ${history.length ? `<ul class="history">
-        ${history.slice(0, 30).map(h => `
-          <li>
-            <span class="h-date">${new Date(h.date).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
-            <span class="h-title">${esc(h.title)}</span>
-            <span class="h-score ${h.passed === true ? 'ok' : h.passed === false ? 'ko' : ''}">
-              ${h.passed === true ? 'APTO' : h.passed === false ? 'NO APTO' : ''} ${h.total - h.errors}/${h.total}
-            </span>
-          </li>`).join('')}
-      </ul>` : '<p class="muted">Todavía no has hecho ningún test.</p>'}
+      <p class="muted">${history.length ? `${history.length} tests guardados.` : 'Todavía no has hecho ningún test.'}
+        <button class="link" data-go="history">Ver historial y evolución</button></p>
 
       <button class="link danger" id="reset">Borrar todo el progreso</button>
     </section>`;
@@ -497,13 +507,115 @@ function renderStats() {
   });
 }
 
+// ---------- historial ----------
+let historyFilter = 'exam';
+
+function renderHistory() {
+  const { qstats, history } = store.getStats();
+  const byId = new Map(bank.map(q => [q.id, q]));
+  const withMax = h => ({ ...h, maxErrors: h.maxErrors ?? EXAMS[h.kind]?.maxErrors ?? null });
+  const exams = history.filter(h => h.mode === 'exam').map(withMax);
+
+  const progress = hist.analyzeProgress(exams, {
+    byId, temaName, seen: Object.keys(qstats).length, bankSize: bank.length,
+  });
+
+  // Gráfico: el tipo de simulacro más hecho (los límites de fallos difieren).
+  const kinds = Object.keys(EXAMS).filter(k => exams.some(e => e.kind === k));
+  const chartKind = kinds.sort((a, b) => exams.filter(e => e.kind === b).length - exams.filter(e => e.kind === a).length)[0];
+  const chartEntries = exams.filter(e => e.kind === chartKind).reverse()
+    .map((e, i) => ({ ...e, n: i + 1 })).slice(-30);
+
+  // Tabla: numeración cronológica dentro del filtro.
+  const list = (historyFilter === 'exam' ? exams : history.map(withMax));
+  const numbered = list.map((h, i) => ({ h, n: list.length - i }));
+
+  const rows = numbered.map(({ h, n }) => {
+    const okCount = h.total - h.errors;
+    const worst = Object.entries(hist.errorsByTema(h, byId)).sort((a, b) => b[1] - a[1])[0];
+    const result = h.passed === true ? '<span class="pill ok">✓ APTO</span>'
+      : h.passed === false ? '<span class="pill ko">✕ NO APTO</span>'
+      : `<span class="pill">${Math.round((okCount / h.total) * 100)}%</span>`;
+    return `
+      <tr>
+        <td class="num">${n}</td>
+        <td class="nowrap">${fmtDate(h.date)}</td>
+        <td>${esc(h.title)}</td>
+        <td class="num">${okCount}/${h.total}</td>
+        <td class="num">${h.errors}${h.maxErrors !== null && h.maxErrors !== undefined ? `<small> / ${h.maxErrors}</small>` : ''}</td>
+        <td>${result}</td>
+        <td class="num">${fmtTime(h.duration ?? 0)}</td>
+        <td>${worst ? `${esc(temaName(worst[0]))} (${worst[1]})` : '—'}</td>
+        <td>${h.items?.length ? `<button class="link" data-attempt="${h.date}">Ver</button>` : ''}</td>
+      </tr>`;
+  }).join('');
+
+  app.innerHTML = `
+    <section class="historyview">
+      <h1>Historial de exámenes</h1>
+
+      <div class="progress-card level-${progress.level}">
+        <span class="level-badge">${{ ok: '✓', mid: '◐', ko: '!', none: '·' }[progress.level]} ${esc(progress.label)}</span>
+        <p class="level-headline">${esc(progress.headline)}</p>
+        <ul>${progress.points.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
+      </div>
+
+      ${chartEntries.length ? `
+        <div class="card">
+          <h2>Fallos por intento <small>${esc(EXAMS[chartKind].nombre)} · ${EXAMS[chartKind].n} preguntas</small></h2>
+          <div class="chart-wrap">
+            ${hist.errorsChart(chartEntries, EXAMS[chartKind].maxErrors, fmtDate)}
+            <div class="c-tip" hidden></div>
+          </div>
+          <p class="chart-note"><span class="key ok"></span> APTO <span class="key ko"></span> NO APTO · Por debajo de la línea discontinua apruebas.</p>
+        </div>` : ''}
+
+      <div class="section-head">
+        <h2>Todos los intentos</h2>
+        <div class="filter" role="tablist">
+          <button class="${historyFilter === 'exam' ? 'active' : ''}" data-hfilter="exam">Simulacros</button>
+          <button class="${historyFilter === 'all' ? 'active' : ''}" data-hfilter="all">Todos los tests</button>
+        </div>
+      </div>
+      ${rows ? `
+        <div class="table-wrap">
+          <table class="attempts">
+            <thead><tr>
+              <th class="num">#</th><th>Fecha</th><th>Test</th><th class="num">Aciertos</th>
+              <th class="num">Fallos</th><th>Resultado</th><th class="num">Tiempo</th><th>Tema más fallado</th><th></th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>` : `<p class="muted">${historyFilter === 'exam' ? 'Todavía no has hecho ningún simulacro.' : 'Todavía no has hecho ningún test.'}</p>`}
+      <p class="muted small">El historial se guarda solo en este navegador.</p>
+    </section>`;
+
+  hist.bindChartTooltip(app);
+  app.querySelectorAll('[data-hfilter]').forEach(b => b.addEventListener('click', () => {
+    historyFilter = b.dataset.hfilter;
+    renderHistory();
+  }));
+  app.querySelectorAll('[data-attempt]').forEach(b => b.addEventListener('click', () => {
+    const entry = history.find(h => String(h.date) === b.dataset.attempt);
+    if (!entry) return;
+    const result = attemptResult(entry);
+    renderResults(result, {
+      ...withMax(entry),
+      tema: entry.mode === 'practice' ? entry.kind : undefined,
+      questions: result.items.map(x => x.q),
+      feedback: entry.mode !== 'exam',
+      fromHistory: true,
+    });
+  }));
+}
+
 // ---------- teclado ----------
 document.addEventListener('keydown', e => {
   if (!session || session.finished || !document.getElementById('modal').hidden) return;
   if (e.target.closest('input, textarea')) return;
   const k = e.key.toLowerCase();
-  const map = { a: 0, b: 1, c: 2, 1: 0, 2: 1, 3: 2 };
-  if (k in map) choose(map[k]);
+  const map = { a: 0, b: 1, c: 2, d: 3, e: 4, 1: 0, 2: 1, 3: 2, 4: 3, 5: 4 };
+  if (k in map && map[k] < session.questions[session.idx].opts.length) choose(map[k]);
   else if (e.key === 'ArrowRight') act('next');
   else if (e.key === 'ArrowLeft') act('prev');
   else if (e.key === 'Enter' && session.feedback && !session.revealed[session.idx]) act('check');

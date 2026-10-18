@@ -5,7 +5,9 @@ A static web app for training for the Spanish DGT motorcycle theory exam (permis
 - **Practice by topic:** random questions from 10 topics, with optional instant feedback
 - **Simulacro:** the real format, 20 questions, 20 minutes, APTO with at most 2 errors. A 30-question variant is also available.
 - **Corrección:** shows APTO/NO APTO, your answer next to the correct one, why it's right, and the legal reference
-- **Stats:** accuracy per topic, exam history, and a review mode for questions you got wrong (stored in the browser's localStorage)
+- **Historial:** one row per attempt, reopen any past correction, a progress summary and a chart of errors per exam
+- **Stats:** accuracy per topic and a review mode for questions you got wrong (all stored in the browser's localStorage)
+- Every question has 5 options (A–E)
 
 ## Structure
 - `03. Execution/code/`: the app (served by GitHub Pages from the `main` branch; the root `index.html` redirects here)

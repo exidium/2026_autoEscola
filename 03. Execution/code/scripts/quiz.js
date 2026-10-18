@@ -11,7 +11,7 @@ export function shuffle(arr) {
 
 // Baraja las opciones y recalcula el índice correcto.
 export function prepare(q) {
-  const order = shuffle([0, 1, 2].slice(0, q.opciones.length));
+  const order = shuffle(q.opciones.map((_, i) => i));
   return {
     ...q,
     opts: order.map(i => q.opciones[i]),
@@ -55,6 +55,16 @@ export function drawFailed(bank, qstats, n) {
   }));
   pool.sort((a, b) => b.key - a.key);
   return pool.slice(0, n).map(x => prepare(x.q));
+}
+
+// Pregunta con las opciones en su orden original (para revisar intentos guardados).
+export function unshuffled(q) {
+  return { ...q, opts: q.opciones.slice(), correct: q.correcta };
+}
+
+// Índice de la respuesta elegida en el orden original de "opciones".
+export function originalIndex(q, answer) {
+  return answer === null ? null : q.opciones.indexOf(q.opts[answer]);
 }
 
 // Las preguntas sin contestar cuentan como fallo, igual que en el examen real.

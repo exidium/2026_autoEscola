@@ -14,3 +14,15 @@
 ### Next week
 - Test the UI on mobile; rebalance option lengths in "prioridad" (the correct answer is often the shortest).
 - Add more questions to the weaker topics.
+
+## Week of 2026-10-12 — update (2026-10-18)
+
+### Shipped
+- 5 options per question (A–E) across all 306 questions: 612 new wrong answers, checked so none is also correct.
+- New "Historial" screen: a table row per attempt (date, test, score, errors vs. limit, result, time, most-missed topic) with "Ver" to reopen any past correction; a progress summary (Listo / Casi listo / Sigue practicando, trend vs. previous 5 exams, pass streak, weak topics); a bar chart of errors per simulacro with the APTO limit line.
+- White theme (dark mode removed).
+- Fixed PAS-028 explanation (it was copied from PAS-027).
+### Decided
+- Bruno chose 5 options even though the real DGT exam uses 3 (harder practice).
+### Next week
+- Check on a phone: history table, chart tooltip, 5-option layout.
