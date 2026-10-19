@@ -26,3 +26,11 @@
 - Bruno chose 5 options even though the real DGT exam uses 3 (harder practice).
 ### Next week
 - Check on a phone: history table, chart tooltip, 5-option layout.
+
+## Week of 2026-10-19
+
+### Shipped
+- Progress file: on Chrome/Edge desktop, progress is auto-saved after every test to a JSON file Bruno picks (one click to reconnect per visit); on other browsers, "Descargar copia" / "Cargar copia". Imports merge without duplicates.
+- Cache-busting (?v=N on CSS/JS/JSON; `node tools/bump-version.mjs` before each release). Bruno had been seeing the stale 3-option, dark version.
+### Blocked / waiting
+- File-save flow not tested in a real browser yet (Chrome extension not connected).

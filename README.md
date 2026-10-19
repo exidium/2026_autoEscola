@@ -14,6 +14,7 @@ A static web app for training for the Spanish DGT motorcycle theory exam (permis
   - `data/questions.json`: question bank
   - `images/signs/`: simplified SVG traffic signs
   - `tools/validate.mjs`: bank checks: run before every push
+  - `tools/bump-version.mjs`: run before every push that changes CSS/JS/data, so browsers fetch the new files
 
 ## Run locally
 ```sh

@@ -1,6 +1,7 @@
-import * as quiz from './quiz.js';
-import * as store from './storage.js';
-import * as hist from './history.js';
+import * as quiz from './quiz.js?v=3';
+import * as store from './storage.js?v=3';
+import * as hist from './history.js?v=3';
+import * as sync from './sync.js?v=3';
 
 export const TEMAS = [
   { id: 'permisos', nombre: 'Permisos y documentación' },
@@ -95,6 +96,7 @@ function renderHome() {
   }).join('');
 
   app.innerHTML = `
+    ${syncBanner()}
     <section class="hero">
       <h1>Aprueba el teórico de moto</h1>
       <p>Examen específico de la DGT para los permisos A1 y A2: <strong>20 preguntas</strong>, <strong>máximo 2 fallos</strong>. ${bank.length} preguntas en el banco.</p>
@@ -143,6 +145,7 @@ function renderHome() {
     <p class="disclaimer">Preguntas propias redactadas a partir del Reglamento General de Circulación, el Reglamento General de Conductores y la Ley de Tráfico. No son las preguntas oficiales de la DGT. Comprueba siempre la normativa vigente.</p>
   `;
 
+  bindBackup(app);
   app.querySelector('#feedback').addEventListener('change', e => store.setSetting('feedback', e.target.checked));
   app.querySelectorAll('[data-exam]').forEach(b => b.addEventListener('click', () => startExam(b.dataset.exam)));
   app.querySelector('[data-review]').addEventListener('click', () => {
@@ -507,6 +510,83 @@ function renderStats() {
   });
 }
 
+// ---------- archivo de progreso ----------
+function backupCard() {
+  const st = sync.getState();
+  let statusLine, actions;
+  if (sync.canAutoSave && st.status === 'ok') {
+    statusLine = `<span class="pill ok">✓ Guardando en archivo</span> <strong>${esc(st.fileName)}</strong>${st.lastSaved ? ` · último guardado ${fmtDate(st.lastSaved)}` : ''}`;
+    actions = `<button class="btn ghost" data-sync="download">Descargar copia</button>
+      <button class="link" data-sync="disconnect">Dejar de usar este archivo</button>`;
+  } else if (sync.canAutoSave && st.status === 'needs-permission') {
+    statusLine = `<span class="pill warn">! Archivo desconectado</span> <strong>${esc(st.fileName)}</strong> · el navegador pide permiso de nuevo en cada visita.`;
+    actions = `<button class="btn primary" data-sync="reconnect">Reconectar archivo</button>
+      <button class="link" data-sync="disconnect">Usar otro archivo</button>`;
+  } else if (sync.canAutoSave) {
+    statusLine = st.status === 'error'
+      ? `<span class="pill ko">✕ No se pudo guardar</span> ${esc(st.lastError)}`
+      : 'Tu progreso solo está guardado en este navegador. Elige un archivo y se guardará ahí automáticamente después de cada test.';
+    actions = `<button class="btn primary" data-sync="create">Crear archivo de progreso</button>
+      <button class="btn ghost" data-sync="open">Abrir archivo existente</button>`;
+  } else {
+    statusLine = 'Este navegador no permite guardar en un archivo automáticamente (sí Chrome o Edge en ordenador). Descarga una copia de vez en cuando y cárgala en otro dispositivo o si se borran los datos.';
+    actions = `<button class="btn primary" data-sync="download">Descargar copia</button>
+      <button class="btn ghost" data-sync="upload">Cargar copia</button>`;
+  }
+  return `
+    <div class="card backup" id="backup">
+      <h2>Guardar tu progreso</h2>
+      <p class="backup-status">${statusLine}</p>
+      <div class="backup-actions">${actions}</div>
+      <p class="backup-msg muted small" aria-live="polite"></p>
+    </div>`;
+}
+
+function bindBackup(root) {
+  root.querySelectorAll('[data-sync]').forEach(b => b.addEventListener('click', async () => {
+    const msg = root.querySelector('.backup-msg');
+    const act = b.dataset.sync;
+    try {
+      if (act === 'create') await sync.createFile();
+      else if (act === 'open') await sync.openFile();
+      else if (act === 'reconnect') await sync.reconnect();
+      else if (act === 'disconnect') await sync.disconnect();
+      else if (act === 'download') sync.download();
+      else if (act === 'upload') {
+        const added = await sync.upload();
+        if (added !== null) {
+          renderHistory();
+          app.querySelector('.backup-msg').textContent = `Copia cargada: ${added} ${added === 1 ? 'intento nuevo' : 'intentos nuevos'} añadidos.`;
+        }
+      }
+    } catch (e) {
+      if (msg) msg.textContent = e.message;
+    }
+  }));
+}
+
+function syncBanner() {
+  const st = sync.getState();
+  if (st.status !== 'needs-permission') return '';
+  return `<div class="sync-banner" id="sync-banner">
+    <span>Tu archivo de progreso <strong>${esc(st.fileName)}</strong> está desconectado.</span>
+    <button class="btn primary small-btn" data-sync="reconnect">Reconectar</button>
+  </div>`;
+}
+
+sync.subscribe(() => {
+  const card = document.getElementById('backup');
+  if (card) {
+    card.outerHTML = backupCard();
+    bindBackup(document.getElementById('backup'));
+  }
+  const banner = document.getElementById('sync-banner');
+  if (banner && sync.getState().status !== 'needs-permission') {
+    banner.remove();
+    if (!session) renderHome();
+  }
+});
+
 // ---------- historial ----------
 let historyFilter = 'exam';
 
@@ -587,10 +667,11 @@ function renderHistory() {
             <tbody>${rows}</tbody>
           </table>
         </div>` : `<p class="muted">${historyFilter === 'exam' ? 'Todavía no has hecho ningún simulacro.' : 'Todavía no has hecho ningún test.'}</p>`}
-      <p class="muted small">El historial se guarda solo en este navegador.</p>
+      ${backupCard()}
     </section>`;
 
   hist.bindChartTooltip(app);
+  bindBackup(app);
   app.querySelectorAll('[data-hfilter]').forEach(b => b.addEventListener('click', () => {
     historyFilter = b.dataset.hfilter;
     renderHistory();
@@ -623,13 +704,14 @@ document.addEventListener('keydown', e => {
 });
 
 // ---------- arranque ----------
-fetch('data/questions.json')
+fetch('data/questions.json?v=3', { cache: 'no-cache' })
   .then(r => {
     if (!r.ok) throw new Error(r.status);
     return r.json();
   })
-  .then(data => {
+  .then(async data => {
     bank = data;
+    await sync.init().catch(() => {});
     renderHome();
   })
   .catch(() => {

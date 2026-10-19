@@ -286,3 +286,15 @@ main { max-width: 760px; margin: 0 auto; padding: 20px 16px 64px; outline: none;
 .pill { display: inline-block; font-size: .78rem; font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
 .pill.ok { background: var(--ok-bg); color: var(--ok); }
 .pill.ko { background: var(--ko-bg); color: var(--ko); }
+
+/* ---------- archivo de progreso ---------- */
+.backup-status { margin: 0 0 12px; color: var(--muted); }
+.backup-status strong { color: var(--text); }
+.backup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.backup-msg:empty { display: none; }
+.pill.warn { background: var(--mid-bg); color: var(--mid); }
+.sync-banner {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--mid-bg); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 18px;
+}
+.small-btn { padding: 8px 16px; font-size: .9rem; }
